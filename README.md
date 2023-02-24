@@ -4,6 +4,7 @@ Each task has certain folders which showcase our work regarding the concerned ta
 The details and dataset related to those codes can be viewed by clicking on the hyperlink.  
 ## Task 1: Machine status sensing 
 [DistributedRandomForest](./DistributedRandomForest/)
+[Edge to database](./data_to_TAMU.py)
 ## Task 2: Machine service and task scheduling 
 [DSEnv](./ReinforcementLearningDashboard/DSEnv/)
 ## Task 3: Self-powered sensing, and sensor wrapper development 
