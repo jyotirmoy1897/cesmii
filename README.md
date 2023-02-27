@@ -6,7 +6,7 @@ The details and dataset related to those codes can be viewed by clicking on the 
 [DistributedRandomForest](./DistributedRandomForest/)    
 [Edge to database](./data_to_TAMU.py)
 ## Task 2: Machine service and task scheduling 
-[Reinforcement Learning Dashoboard](./ReinforcementLearningDashboard/)
+[Reinforcement Learning Dashboard](./ReinforcementLearningDashboard/)
 ## Task 3: Self-powered sensing, and sensor wrapper development 
 [CESMII-Simantha-Dashboard](./CESMII-Simantha-Dashboard/)  
 [CESMII-XAI-Smart-Surface-Grinding](./CESMII-XAI-Smart-Surface-Grinding/)
