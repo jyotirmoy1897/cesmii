@@ -18,10 +18,8 @@ class DsEnv(gym.Env):
         Environment to model the job shop scheduling with multiple parrallel machines
         We have also breakdown probabilty based which increases with dissimilar object
 
-        Reward:
-        Green or tradiness : multi objective needs to be weighted for now
-         - one way of solving multi objective is using multi agent--different agent for different objective
-
+        Reward: Minimum makespan
+        
         Action: number of legal jobs and not doing anything
 
         State: same as JSS + machine probability state
@@ -329,17 +327,7 @@ class DsEnv(gym.Env):
                     self.legal_actions[self.nb_jobs] = True
                     return 0
         return 1
-        """
-        self.machine_legal[machine_needed] -= 1
-        self.nb_machine_legal -= 1
-        for job in range(self.nb_jobs):
-            if self.needed_machine_jobs[job] == machine_needed:
-                #print(
-                #    "time_machine", self.time_until_available_machine[machine_needed])
-                if self.time_until_available_machine[machine_needed].all() and self.legal_actions[job]:
-                    self.legal_actions[job] = False
-                    self.nb_legal_actions -= 1
-        """
+
 
     def add_machine(self, machine_needed: int):
         for i in range(np.shape(self.time_until_available_machine[machine_needed])[0]):
@@ -349,86 +337,7 @@ class DsEnv(gym.Env):
                 self.legal_actions[self.nb_jobs] = True
                 return 0
         return 1
-        """
-        self.machine_legal[machine_needed] += 1
-        self.nb_machine_legal += 1
-        for job in range(self.nb_jobs):
-            if self.needed_machine_jobs[job] == machine_needed:
-                #print(
-                #    "time_machine", self.time_until_available_machine[machine_needed])
-                if self.legal_actions[job]:
-                    self.legal_actions[job] = True
-                    self.nb_legal_actions += 1
-        """
-    """
-    def stop_reset(self):
-
-        #self.current_time_step = 0
-        #self.next_time_step = list()
-        #self.next_jobs = list()
-        # check on this-> is it at max
-
-        # number of allowed actions
-        self.nb_legal_actions = self.nb_jobs
-        self.nb_machine_legal = 0
-
-        # iniialize leagal actions
-
-        self.legal_actions = np.ones(self.nb_jobs + 1, dtype=np.bool)
-        self.legal_actions[self.nb_jobs] = False
-
-        self.time_until_available_machine = np.zeros(
-            (self.nb_machines, self.nb_type_max), dtype=np.float)
-        for time_mach in range(self.time_until_available_machine.shape[0]):
-            self.time_until_available_machine[time_mach][int(
-                self.nb_machines_types[time_mach]):] = self.sum_op
-
-        #self.time_until_finish_current_op_jobs = np.zeros(
-        #    self.nb_jobs, dtype=np.float)
-
-        self.needed_machine_jobs = np.zeros(self.nb_jobs, dtype=np.int)
-
-        self.illegal_actions = np.zeros(
-            (self.nb_machines, self.nb_jobs), dtype=np.bool)
-        self.action_illegal_no_op = np.zeros(self.nb_jobs, dtype=np.bool)
-
-        # store availabe machines
-
-        #change this to set as per number of machines
-        self.machine_legal = np.ones(
-            self.nb_machines, dtype=np.int)  # *self.nb_type_max
-        for legal_mach in range(self.machine_legal.shape[0]):
-            self.machine_legal[legal_mach] = int(
-                self.nb_machines_types[legal_mach])
-
-        # Can set machine legal as false have to check the update step for this and time availabe
-
-        for job in range(self.nb_jobs):
-            job_time_step = np.where(self.solution[job] == -1)
-
-            needed_machine = int(
-                self.instance_matrix[job][job_time_step[0][0]][0])
-            self.needed_machine_jobs[job] = needed_machine
-
-            # if machine availabe, use it and block it
-            # check row sum and negate the first available
-
-            # this is to check which machines are required\
-
-            if self.machine_legal[needed_machine] > 0:
-                self.machine_legal[needed_machine] -= 1
-                # required is slightly diff as it is to set to keep count of requirement
-                self.nb_machine_legal += 1
-        #why did I repeat
-        # to mark all machines as available
-        self.machine_legal = np.ones(
-            self.nb_machines, dtype=np.int)  # *self.nb_type_max
-        for legal_mach in range(self.machine_legal.shape[0]):
-            self.machine_legal[legal_mach] = int(
-                self.nb_machines_types[legal_mach])
-
-        return self._get_current_state_representation()
-    """
+      
 
     def _prioritization_non_final(self):
         if self.nb_machine_legal >= 1:
@@ -635,7 +544,7 @@ class DsEnv(gym.Env):
                 # print("oks", self.nb_machine_legal,  len(
                 #    self.next_time_step), self.nb_legal_actions)
                 while self.nb_machine_legal == 0 and len(self.next_time_step) > 0:
-                    #print("ok increae time")
+                    
                     reward -= self._increase_time_step()
                 # print(self.legal_actions, " skksks")
                 self._prioritization_non_final()
@@ -708,15 +617,7 @@ class DsEnv(gym.Env):
                 self.state[job][6] = self.total_idle_time_jobs[job] / self.sum_op
         for machine in range(self.nb_machines):
             if np.min(self.time_until_available_machine[machine]) < difference:
-                """
-                check_machine_requirement = 0
-                for job in range(self.nb_jobs):
-                    if self.time_until_finish_current_op_jobs[job] == 0 and \
-                            self.needed_machine_jobs[job] == machine and self.idle_time_jobs_last_op[job] != 0:
-                        check_machine_requirement = 1
-                        #print(job, self.idle_time_jobs_last_op[job])
-                if check_machine_requirement:
-                """
+
                 idle_machines = self.time_until_available_machine[machine] < difference
                 idle_avg = idle_machines * (difference
                                             - self.time_until_available_machine[machine])/idle_machines.shape[0]
@@ -845,47 +746,7 @@ class DsEnv(gym.Env):
             #img_val = Image.open(buf)
 
             return fig  # np.asarray(img_val)
-    """
-    def render(self, mode='human'):
-        df = []
-        for job in range(self.nb_jobs):
-            i = 0
-            while i < self.nb_operations and self.solution[job][i] != -1:
-                dict_op = dict()
-                dict_op["Task"] = 'Fabrication {}'.format(job)
-                start_sec = 0+self.solution[job][i]
-                # print(start_sec, self.start_timestamp)
-                finish_sec = start_sec + self.instance_matrix[job][i][1]
-                dict_op["Start"] = start_sec
-                dict_op["Finish"] = finish_sec
-                dict_op["Resource"] = "Machine {}".format(
-                    self.instance_matrix[job][i][0])
-                df.append(dict_op)
-                i += 1
-        fig = None
-        if len(df) > 0:
-            #print(self.solution)
-            df = pd.DataFrame(df)
-            print(df.head())
-            df["Start"] = pd.to_datetime(df["Start"]*3600, unit="s")
-            df["Start"] = df["Start"].apply(
-                lambda x: x.replace(year=2022, month=6, day=1))
-            df["Finish"] = pd.to_datetime(df["Finish"]*3600, unit="s")
-            df["Finish"] = df["Finish"].apply(
-                lambda x: x.replace(year=2022, month=6, day=1))
-            print(df.head())
-            # print("fig", df)
-            fig = px.timeline(df, x_start="Start", x_end="Finish",
-                              y="Task", color="Resource")
-            fig.update_xaxes(
-                tickformat="%H",
-                tickformatstops=[
-                    dict(dtickrange=[3600000, 86400000], value="%H")]  # range is 1 hour to 24 hours
-            )
-            # otherwise tasks are listed from the bottom up
-            fig.update_yaxes(autorange="reversed")
-        return fig
-    """
+   
 
     def makespan(self):
         max_make = 0
