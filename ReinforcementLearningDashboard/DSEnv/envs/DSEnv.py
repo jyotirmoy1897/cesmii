@@ -13,7 +13,7 @@ from pathlib import Path
 
 class DsEnv(gym.Env):
 
-    def __init__(self, nb_jobs, nb_operations, nb_machines, nb_machines_types, instance_file=None):
+    def __init__(self, nb_jobs, nb_operations, nb_machines, nb_machines_types, instance_file=None, machine_health=None):
         """
         Environment to model the job shop scheduling with multiple parrallel machines
         We have also breakdown probabilty based which increases with dissimilar object
@@ -169,7 +169,9 @@ class DsEnv(gym.Env):
 
                     proc_cnt += 1
                 job_init_cnt += 1
+        self.machine_breakdown_index = None
         # TO do color scheme based on groups
+
         self.colors = [
             tuple([random.random() for _ in range(3)]) for _ in range(self.nb_machines)
         ]
@@ -177,9 +179,13 @@ class DsEnv(gym.Env):
         #print("Instance: ", self.instance_matrix)
 
         #Machine Heaalth based on time
+        if np.any(machine_health) == None:
+            self.machine_health = np.ones(
+                (self.nb_machines, self.nb_type_max), dtype=np.float)*5
+        else:
+            self.machine_health = machine_health
 
-        self.machine_health = np.ones(
-            (self.nb_machines, self.nb_type_max), dtype=np.float)*5
+        self.solution_machine = None
 
         self.breakdown_martix = np.eye(5, 5)*0.9
 
@@ -239,6 +245,10 @@ class DsEnv(gym.Env):
 
         self.solution = np.full(
             (self.nb_jobs, self.nb_operations), -1, dtype=np.float)
+
+        self.solution_machine = np.full(
+            (self.nb_jobs, self.nb_operations), -1, dtype=np.float)
+        self.machine_breakdown_index = -1
         #change here TO DO
 
         # change the unavailabe machines to inf or machine legal
@@ -522,7 +532,7 @@ class DsEnv(gym.Env):
         if self.legal_actions[action]:
             #print("okas")
             if action == self.nb_jobs:
-                print(" no op taken")
+                #print(" no op taken")
 
                 self.nb_machine_legal = 0
                 self.nb_legal_actions = 0
@@ -535,12 +545,11 @@ class DsEnv(gym.Env):
                     self.action_illegal_no_op[job] = False
                 while self.nb_machine_legal == 0:
                     reward -= self._increase_time_step()
-                    print("sdsd")
 
                 self._prioritization_non_final()
                 self._check_no_op()
                 scaled_reward = self._reward_scaler(reward)
-                return self._get_current_state_representation(), scaled_reward, self._is_done(), {}
+                return self._get_current_state_representation(), scaled_reward, self._is_done(),  {"machine_health": self.machine_health, "breakdown": -1, "index": self.machine_breakdown_index}
             else:
 
                 current_time_step_job = self.todo_time_step_job[action]
@@ -553,8 +562,9 @@ class DsEnv(gym.Env):
                     #This will allow stopping extra machines
                     if self.time_until_available_machine[machine_needed][i] == 0 and self.machine_health[machine_needed][i] > 1:
                         self.time_until_available_machine[machine_needed][i] = time_needed
-                        if random.uniform(0, 1) > 0.9:
+                        if random.uniform(0, 1) > 0.2:
                             self.machine_health[machine_needed][i] -= 1
+                        self.solution_machine[action][current_time_step_job] = i
                         flag_not_allocated = 0
                         break
 
@@ -565,10 +575,17 @@ class DsEnv(gym.Env):
                          == 0 and self.machine_health[machine_needed][i] == 1:
                             self.time_until_available_machine[machine_needed][i] = self.repair_time
                             self.machine_health[machine_needed][i] = 5
+                            self.machine_breakdown_index = i
                             break
 
-                    print(" no op taken as machine broken")
-
+                    time_needed = self.repair_time
+                    to_add_time_step = self.current_time_step + time_needed
+                    if to_add_time_step not in self.next_time_step:
+                        index = bisect.bisect_left(
+                            self.next_time_step, to_add_time_step
+                        )
+                        self.next_time_step.insert(index, to_add_time_step)
+                        self.next_jobs.insert(index, action)
                     self.nb_machine_legal = 0
                     self.nb_legal_actions = 0
                     for job in range(self.nb_jobs):
@@ -584,7 +601,7 @@ class DsEnv(gym.Env):
                     self._prioritization_non_final()
                     self._check_no_op()
                     scaled_reward = self._reward_scaler(reward)
-                    return self._get_current_state_representation(), scaled_reward, self._is_done(), {}
+                    return self._get_current_state_representation(), scaled_reward, self._is_done(), {"machine_health": self.machine_health, "breakdown": needed_machine, "index": self.machine_breakdown_index}
 
                 self.time_until_finish_current_op_jobs[action] = time_needed
                 self.state[action][1] = time_needed / self.max_time_op
@@ -626,9 +643,9 @@ class DsEnv(gym.Env):
                 # print("reward", reward)
                 scaled_reward = self._reward_scaler(reward)
                 #print("number", self.nb_machine_legal, self.nb_legal_actions)
-                return self._get_current_state_representation(), scaled_reward, self._is_done(), {}
+                return self._get_current_state_representation(), scaled_reward, self._is_done(), {"machine_health": self.machine_health, "breakdown": -1, "index": self.machine_breakdown_index}
         else:
-            return self._get_current_state_representation(), 0, self._is_done(), {}
+            return self._get_current_state_representation(), 0, self._is_done(), {"machine_health": self.machine_health, "breakdown": -1, "index": self.machine_breakdown_index}
 
     def _reward_scaler(self, reward):
         return reward / (self.max_time_op)
@@ -641,6 +658,7 @@ class DsEnv(gym.Env):
         # if not self.next_time_step:
         # print(self.state)
         hole_planning = 0
+
         next_time_step_to_pick = self.next_time_step.pop(0)
         self.next_jobs.pop(0)
 
@@ -750,8 +768,8 @@ class DsEnv(gym.Env):
                     self.instance_matrix[job][i][1]  # *3600
                 dict_op["Start"] = start_sec
                 dict_op["Finish"] = finish_sec
-                dict_op["Resource"] = "Machine {}".format(
-                    self.instance_matrix[job][i][0])
+                dict_op["Resource"] = "Machine {}: Index {}".format(
+                    self.instance_matrix[job][i][0], self.solution_machine[job][i])
                 df.append(dict_op)
                 i += 1
         fig = None
@@ -794,8 +812,8 @@ class DsEnv(gym.Env):
                     self.instance_matrix[job][i][1]  # *3600
                 dict_op["Start"] = start_sec
                 dict_op["Finish"] = finish_sec
-                dict_op["Resource"] = "Machine {}".format(
-                    self.instance_matrix[job][i][0])
+                dict_op["Resource"] = "Machine {}: Index {}".format(
+                    self.instance_matrix[job][i][0], self.solution_machine[job][i])
                 df.append(dict_op)
                 i += 1
         fig = None
@@ -815,8 +833,8 @@ class DsEnv(gym.Env):
                 fig.data[i].x = df[df["Resource"]
                                    == fig.data[i].name].Delta.tolist()
 
-            fig.add_vrect(x0=break_time, x1=break_time+repair_time,
-                          line_width=0, fillcolor="red", opacity=0.2)
+            #fig.add_vrect(x0=break_time, x1=break_time+repair_time,
+            #              line_width=0, fillcolor="red", opacity=0.2)
             #fig.update_yaxes(autorange="reversed")
             #fig.show()
             import io
